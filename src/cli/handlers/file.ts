@@ -1,21 +1,14 @@
 import type { GitStatusEntry, GitStatusResult } from '../../shared/git-status-types'
-import type {
-  RuntimeFileOpenPosition,
-  RuntimeFileOpenResult,
-  RuntimeWorktreeRecord
-} from '../../shared/runtime-types'
+import type { RuntimeFileOpenResult, RuntimeWorktreeRecord } from '../../shared/runtime-types'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import { isRuntimePathAbsolute, relativePathInsideRoot } from '../../shared/cross-platform-path'
 import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import type { CommandHandler, HandlerContext } from '../dispatch'
-import {
-  getOptionalPositiveIntegerFlag,
-  getOptionalStringFlag,
-  getRequiredStringFlag
-} from '../flags'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
 import { getOptionalWorktreeSelector, resolveCurrentWorktreeSelector } from '../selectors'
+import { getFileOpenPosition } from './file-open-position'
 
 type FileOpenMode = 'edit' | 'diff'
 type OpenChangedMode = FileOpenMode | 'both'
@@ -130,21 +123,6 @@ function getOpenChangedMode(flags: Map<string, string | boolean>): OpenChangedMo
 // clients are not navigated). Hosts treat a missing field as the legacy switch.
 function getFileOpenNavigation(flags: Map<string, string | boolean>): RuntimeNavigationTarget {
   return flags.get('focus') === true ? 'all' : 'caller'
-}
-
-// Why: a column with no line has nowhere to land; refuse it rather than open at the top as if honored.
-function getFileOpenPosition(
-  flags: Map<string, string | boolean>
-): RuntimeFileOpenPosition | undefined {
-  const line = getOptionalPositiveIntegerFlag(flags, 'line')
-  const column = getOptionalPositiveIntegerFlag(flags, 'column')
-  if (line === undefined) {
-    if (column !== undefined) {
-      throw new RuntimeClientError('invalid_argument', '--column needs --line.')
-    }
-    return undefined
-  }
-  return column === undefined ? { line } : { line, column }
 }
 
 function canOpenEntryForEdit(entry: GitStatusEntry): string | null {

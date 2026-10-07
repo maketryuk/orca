@@ -194,6 +194,8 @@ describe('orca file CLI handlers', () => {
 
   it.each([
     [['--column', '7'], '--column needs --line.'],
+    [['--line='], 'Missing value for --line.'],
+    [['--line', '2', '--column='], 'Missing value for --column.'],
     [['--line', '0'], 'Invalid positive integer for --line'],
     [['--line', '4.5'], 'Invalid positive integer for --line'],
     [['--line', '2', '--column', 'x'], '--column']
