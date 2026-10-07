@@ -1,10 +1,18 @@
 import type { GitStatusEntry, GitStatusResult } from '../../shared/git-status-types'
-import type { RuntimeFileOpenResult, RuntimeWorktreeRecord } from '../../shared/runtime-types'
+import type {
+  RuntimeFileOpenPosition,
+  RuntimeFileOpenResult,
+  RuntimeWorktreeRecord
+} from '../../shared/runtime-types'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import { isRuntimePathAbsolute, relativePathInsideRoot } from '../../shared/cross-platform-path'
 import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import type { CommandHandler, HandlerContext } from '../dispatch'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
+import {
+  getOptionalPositiveIntegerFlag,
+  getOptionalStringFlag,
+  getRequiredStringFlag
+} from '../flags'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
 import { getOptionalWorktreeSelector, resolveCurrentWorktreeSelector } from '../selectors'
@@ -124,6 +132,21 @@ function getFileOpenNavigation(flags: Map<string, string | boolean>): RuntimeNav
   return flags.get('focus') === true ? 'all' : 'caller'
 }
 
+// Why: a column with no line has nowhere to land; refuse it rather than open at the top as if honored.
+function getFileOpenPosition(
+  flags: Map<string, string | boolean>
+): RuntimeFileOpenPosition | undefined {
+  const line = getOptionalPositiveIntegerFlag(flags, 'line')
+  const column = getOptionalPositiveIntegerFlag(flags, 'column')
+  if (line === undefined) {
+    if (column !== undefined) {
+      throw new RuntimeClientError('invalid_argument', '--column needs --line.')
+    }
+    return undefined
+  }
+  return column === undefined ? { line } : { line, column }
+}
+
 function canOpenEntryForEdit(entry: GitStatusEntry): string | null {
   if (entry.status === 'deleted') {
     return 'deleted file has no edit target'
@@ -213,12 +236,14 @@ function formatFileDiff(result: RuntimeFileOpenResult): string {
 export const FILE_HANDLERS: Record<string, CommandHandler> = {
   'file open': async (ctx) => {
     const path = getRequiredStringFlag(ctx.flags, 'path')
+    const position = getFileOpenPosition(ctx.flags)
     const worktree = await getFileWorktreeSelector(ctx)
     const relativePath = await resolveFilePath(ctx, worktree, path)
     const result = await ctx.client.call<RuntimeFileOpenResult>('files.open', {
       worktree,
       relativePath,
-      navigation: getFileOpenNavigation(ctx.flags)
+      navigation: getFileOpenNavigation(ctx.flags),
+      ...position
     })
     requireOpened(result.result, relativePath)
     printResult(result, ctx.json, formatFileOpen)
